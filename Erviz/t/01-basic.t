@@ -2,9 +2,7 @@ use Test::More;
 use Data::Dump;
 BEGIN {use_ok 'Erviz::Parser'};
 
-my $text = q/
-
-[Area] { mark: "<ext.>"; color: green }
+my $text = q/[Area] { mark: "<ext.>"; color: green }
 
 [Order]
 *Order ID
@@ -15,12 +13,24 @@ my $text = q/
 Customer ID*
 Order Date
 
-[Foo]
+[Biz]
+[  Foo]
 *Quux ID
  Bar ID*
+
+[Quux  ]
+
+[Department]
+*Quux ID
+ Bar ID*
+
+
+[Employee] *--? [Department] <-foo>
+[Foo  ] 1--* [  Bar] <quux for bar->
 /;
 
 my $parser = new_ok('Erviz::Parser');
+
 ok(my $tree = $parser->parse($text), 'parsed ok');
 
 warn dd $tree;

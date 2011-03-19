@@ -4,35 +4,59 @@ use Moose;
 use Regexp::Grammars;
 use Data::Dump;
 my $grammar = qr{
-#  <logfile: - >
+  # <logfile: parser_log>
+  # <debug: on>
 
   <ERD>
 
-  <rule: ERD>                   <[Entity]>+ <Relationship>?
-  <rule: Entity>                \[ <EntityName> \] <Options>? <Attributes>?
+  <rule: ERD>                   <[Entity]>+ \n <Relationships>?
 
-  <rule: EntityName>            <identifier>
+  <rule: Entity>                <EntityName> <Options>? \n <Attributes>?
+
+  <rule: EntityName>            \[ <identifier> \]
 
   <rule: Options>               \{ <[Option]> ** ; \}
   <rule: Option>                <key> : <value>
   <token: key>                  \w+
   <token: value>                ".*?"|\w+
 
-  <rule: Attributes>            <[Attribute]>+
-
-  <rule: Attribute>             <primarykey>? <AttributeInfo> <foreignkey>?
+  <rule: Attributes>            <[Attribute]>+ ** \n
+ 
+  <rule: Attribute>             <primarykey>? <AttributeName> <foreignkey>?
   <token: primarykey>           \*
   <token: foreignkey>           \*
 
-  <rule: AttributeInfo>         <Type>       <AttributeIdentifier>
+  <rule: AttributeName>         <identifier>
 
-  <rule: AttributeIdentifier>   <identifier>
+  <rule: Relationships>         <[Relationship]>+
+  <rule: Relationship>          <FirstRelEntity> <Cardinality> <SecondRelEntity> <RelOptAttr>
 
-  <rule: Type>                  <:EntityName>|<identifier>
+  <rule: FirstRelEntity>        <RelEntity>
+  <rule: SecondRelEntity>       <RelEntity>
 
-  <rule: Relationship>          <identifier>
+  <rule: RelOptAttr>            <Verb>? <RelOption>?
 
-  <token: identifier>           \w+
+  <rule: RelEntity>             <EntityName>
+  <rule: Cardinality>           <FirstCardinalitySymbol> -- <SecondCardinalitySymbol>
+  <rule: FirstCardinalitySymbol> <CardinalitySymbol>
+  <rule: SecondCardinalitySymbol> <CardinalitySymbol>
+
+  <rule: CardinalitySymbol>     <OneOptional>|<OneMandatory>|<ManyOptional>|<ManyMandatory>
+  <token: OneOptional>          \?
+  <token: OneMandatory>         1
+
+  <token: ManyMandatory>        \+
+  <token: ManyOptional>         \*
+ 
+  <rule: Verb>                  \< <VerbDirection> \>
+  <rule: VerbDirection>         <LeftRight> | <RightLeft>
+  <rule: LeftRight>             <identifier> <dash>
+  <rule: RightLeft>             <dash> <identifier>
+  <token: dash>                 -
+
+  <rule: RelOption>             <Options>
+  <token: identifier>           [\w ]+ #\w+(?: \w+)
+
 }xms;
 
 sub parse {
