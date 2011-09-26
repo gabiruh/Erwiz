@@ -2,61 +2,85 @@ package Erviz::Parser;
 use 5.010;
 use Moose;
 use Regexp::Grammars;
-use Data::Dump;
+
+use Erviz::ERD::Entity;
+use Erviz::ERD::Attribute;
+use Erviz::ERD::Option;
+
 my $grammar = qr{
   # <logfile: parser_log>
-  # <debug: on>
+  #  <debug: on>
+  <nocontext:>
+  <erd>
 
-  <ERD>
+  <rule: erd>                   <[element]>+ ** <.ws>
+  <rule: element>               <entity> | <relationship> | <header>
+  <rule: header>                \{ title \: "<[title]>" ; <[header_options]>* \}
+  <rule: header_options>         <[option]> ** ;
+  <rule: title>                 [^"]*
 
-  <rule: ERD>                   <[Entity]>+ \n <Relationships>?
+  <objrule: Erviz::ERD::Entity=entity>                \[ <name=entity_name> \] <options>? \n
+                                <.ws> <[attributes=attribute]>* ** \n
+                                (?{ $MATCH{name} = $MATCH{name}{identifier}})
 
-  <rule: Entity>                <EntityName> <Options>? \n <Attributes>?
+  <rule: entity_name>           <identifier>
 
-  <rule: EntityName>            \[ <identifier> \]
+  <rule: options>               \{ <[option]> ** ; \} (?{ $MATCH = $MATCH{option}})
+  <objrule: Erviz::ERD::Option=option>                <key> : <value> 
+  <token: key>                  \w[\w-]*
+  <token: value>                ".*?"|\w+|\d+
 
-  <rule: Options>               \{ <[Option]> ** ; \}
-  <rule: Option>                <key> : <value>
-  <token: key>                  \w+
-  <token: value>                ".*?"|\w+
+  <objrule: Erviz::ERD::Attribute=attribute>             <primarykey>? <name=attribute_name> <foreignkey>? 
+                                <options>?
 
-  <rule: Attributes>            <[Attribute]>+ ** \n
+  <token: primarykey>           \* (?{ $MATCH = 1 })
+  <token: foreignkey>           \* (?{ $MATCH = 1 })
+
+  <rule: attribute_name>        <identifier> (?{ $MATCH = $MATCH{identifier}})
+
+  <rule: relationship>            <first_rel_entity> <cardinality> 
+                                  <second_rel_entity> <rel_opt_attr>
+
+  <rule: first_rel_entity>        <rel_entity> 
+                                  (?{ $MATCH = $MATCH{rel_entity}{entity_name}{identifier}})
+
+  <rule: second_rel_entity>       <rel_entity>
+                                  (?{ $MATCH = $MATCH{rel_entity}{entity_name}{identifier}})
+  <rule: rel_opt_attr>            <verb>? <rel_option>?
+
+  <rule: rel_entity>              \[ <entity_name> \]
+  <rule: cardinality>              <first=first_cardinality_symbol>--<second=second_cardinality_symbol>
+
+  <rule: first_cardinality_symbol>  <cardinality_symbol> 
+                                    (?{ $MATCH = $MATCH{cardinality_symbol}})
+
+  <rule: second_cardinality_symbol>  <cardinality_symbol>
+                                     (?{ $MATCH = $MATCH{cardinality_symbol}})
+
+  <rule: cardinality_symbol>     <one_optional>   (?{ $MATCH = 'one_optional'; })   |
+                                 <one_mandatory>  (?{ $MATCH = 'one_mandatory'; })  |
+                                 <many_optional>  (?{ $MATCH = 'many_optional'; })  |
+                                 <many_mandatory> (?{ $MATCH = 'many_mandatory'; }) |
+                                 <any_relationship>   (?{ $MATCH = 'any_relationship'; }) |
+  <token: one_optional>          \?
+  <token: one_mandatory>         1
+
+  <token: many_mandatory>        \+
+  <token: many_optional>         \*
+  <token: any_relationship>      -
  
-  <rule: Attribute>             <primarykey>? <AttributeName> <foreignkey>?
-  <token: primarykey>           \*
-  <token: foreignkey>           \*
+  <rule: verb>                  \< <verb_direction> \>
+                                (?{ $MATCH = $MATCH{verb_direction}})
 
-  <rule: AttributeName>         <identifier>
-
-  <rule: Relationships>         <[Relationship]>+
-  <rule: Relationship>          <FirstRelEntity> <Cardinality> <SecondRelEntity> <RelOptAttr>
-
-  <rule: FirstRelEntity>        <RelEntity>
-  <rule: SecondRelEntity>       <RelEntity>
-
-  <rule: RelOptAttr>            <Verb>? <RelOption>?
-
-  <rule: RelEntity>             <EntityName>
-  <rule: Cardinality>           <FirstCardinalitySymbol> -- <SecondCardinalitySymbol>
-  <rule: FirstCardinalitySymbol> <CardinalitySymbol>
-  <rule: SecondCardinalitySymbol> <CardinalitySymbol>
-
-  <rule: CardinalitySymbol>     <OneOptional>|<OneMandatory>|<ManyOptional>|<ManyMandatory>
-  <token: OneOptional>          \?
-  <token: OneMandatory>         1
-
-  <token: ManyMandatory>        \+
-  <token: ManyOptional>         \*
- 
-  <rule: Verb>                  \< <VerbDirection> \>
-  <rule: VerbDirection>         <LeftRight> | <RightLeft>
-  <rule: LeftRight>             <identifier> <dash>
-  <rule: RightLeft>             <dash> <identifier>
+  <rule: verb_direction>        <left_right> (?{ $MATCH = 'left_right'; }) |
+                                <right_left> (?{ $MATCH = 'right_left'; })
+  <rule: left_right>            <identifier> <dash>
+  <rule: right_left>            <dash> <identifier>
   <token: dash>                 -
 
-  <rule: RelOption>             <Options>
-  <token: identifier>           [\w ]+ #\w+(?: \w+)
-
+  <rule: rel_option>            <[options]>?
+  <token: identifier>           [^[][\w ]+
+  <token: ws>                   (?: \s+ | \#[^\n]* )*
 }xms;
 
 sub parse {
