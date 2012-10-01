@@ -4,24 +4,26 @@ use overload
   fallback => 1;
 
 use Moose;
+with 'Erviz::ERD::Role::Options';
 
 has name => ( is => 'ro', isa => 'Str', required => 1 );
-has primary_key =>
-  ( is => 'ro', isa => 'Bool', default => 0, predicate => 'is_primary_key' );
+has is_primary_key =>
+  ( is => 'ro', isa => 'Bool', default => 0, init_arg => 'primary_key' );
 
-has foreign_key =>
-  ( is => 'ro', isa => 'Bool', default => 0, predicate => 'is_foreign_key' );
-
-has options => ( is => 'ro', isa => 'ArrayRef[Erviz::ERD::Option]' );
+has is_foreign_key =>
+  ( is => 'ro', isa => 'Bool', default => 0, init_arg => 'foreign_key' );
 
 sub as_string {
-  my $self       = shift;
-  my $name       = $self->name;
-  my $constraint = ( $self->primary_key && 'PK' )
-    || ( $self->foreign_key && 'FK' );
-  my $is_constraint = ( $self->primary_key || $self->foreign_key ) ? '*' : '';
+  my $self = shift;
+  my $name = quotemeta $self->name;
+  my $constraint = '';
+  $constraint = '(FK)' if $self->is_foreign_key;
+  $constraint = '(PK)' if $self->is_primary_key;
 
-  return qq!{ $is_constraint | $name ($constraint) }!;
+  my $is_constraint = ( $self->is_primary_key || $self->is_foreign_key ) ? '*' : '';
+  my $mark =
+    quotemeta( $self->has_option('mark') ? $self->remove_option('mark') : '' );
+  return qq!$name $constraint $mark!;
 }
 1;
 

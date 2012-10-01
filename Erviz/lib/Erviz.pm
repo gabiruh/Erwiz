@@ -1,7 +1,15 @@
 package Erviz;
-
 use warnings;
 use strict;
+
+use Exporter 'import';
+our @EXPORT_OK = qw(process);
+
+
+use Erviz::Parser qw(parse);
+use Erviz::Render qw(render);
+
+
 
 =head1 NAME
 
@@ -18,6 +26,15 @@ our $VERSION = '0.01';
 =head1 SYNOPSIS
 
 =head1 SUBROUTINES/METHODS
+
+=head2 process
+
+=cut
+
+sub process {
+  my $input = shift;
+  print render(parse($input));
+}
 
 =head1 AUTHOR
 

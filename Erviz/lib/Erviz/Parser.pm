@@ -1,6 +1,11 @@
 package Erviz::Parser;
+use warnings;
+use strict;
 use 5.010;
-use Moose;
+
+use Exporter 'import';
+our @EXPORT_OK = qw(parse);
+
 use Regexp::Grammars;
 
 use Erviz::ERD::Entity;
@@ -8,15 +13,15 @@ use Erviz::ERD::Attribute;
 use Erviz::ERD::Option;
 
 my $grammar = qr{
-  # <logfile: parser_log>
-  #  <debug: on>
+   <logfile: parser_log>
+    <debug: on>
   <nocontext:>
   <erd>
 
   <rule: erd>                   <[element]>+ ** <.ws>
   <rule: element>               <entity> | <relationship> | <header>
   <rule: header>                \{ title \: "<[title]>" ; <[header_options]>* \}
-  <rule: header_options>         <[option]> ** ;
+  <rule: header_options>         <[option]> ** ;  (?{ $MATCH = +{ map {@$_} @{$MATCH{option}}}})
   <rule: title>                 [^"]*
 
   <objrule: Erviz::ERD::Entity=entity>                \[ <name=entity_name> \] <options>? \n
@@ -25,36 +30,40 @@ my $grammar = qr{
 
   <rule: entity_name>           <identifier>
 
-  <rule: options>               \{ <[option]> ** ; \} (?{ $MATCH = $MATCH{option}})
-  <objrule: Erviz::ERD::Option=option>                <key> : <value> 
+  <rule: options>               \{ <[option]> ** ; \} (?{ $MATCH = +{ map {@$_} @{$MATCH{option}}}})
+  <rule: option>                <key> : <value> (?{ $MATCH = [$MATCH{key}, $MATCH{value}] })
   <token: key>                  \w[\w-]*
   <token: value>                ".*?"|\w+|\d+
 
-  <objrule: Erviz::ERD::Attribute=attribute>             <primarykey>? <name=attribute_name> <foreignkey>? 
+  <objrule: Erviz::ERD::Attribute=attribute>             <primary_key>? <name=attribute_name> <foreign_key>? 
                                 <options>?
 
-  <token: primarykey>           \* (?{ $MATCH = 1 })
-  <token: foreignkey>           \* (?{ $MATCH = 1 })
+  <token: primary_key>           \* (?{ $MATCH = 1 })
+  <token: foreign_key>           \* (?{ $MATCH = 1 })
 
   <rule: attribute_name>        <identifier> (?{ $MATCH = $MATCH{identifier}})
 
-  <rule: relationship>            <first_rel_entity> <cardinality> 
-                                  <second_rel_entity> <rel_opt_attr>
+  <rule: relationship>            <left_rel_entity> <cardinality> 
+                                  <right_rel_entity> <rel_opt_attr>
 
-  <rule: first_rel_entity>        <rel_entity> 
-                                  (?{ $MATCH = $MATCH{rel_entity}{entity_name}{identifier}})
+  <rule: left_rel_entity>        <rel_entity> 
 
-  <rule: second_rel_entity>       <rel_entity>
-                                  (?{ $MATCH = $MATCH{rel_entity}{entity_name}{identifier}})
+  <rule: right_rel_entity>       <rel_entity>
   <rule: rel_opt_attr>            <verb>? <rel_option>?
 
-  <rule: rel_entity>              \[ <entity_name> \]
-  <rule: cardinality>              <first=first_cardinality_symbol>--<second=second_cardinality_symbol>
+  <rule: rel_entity>              <rel_entity_rounded>|<rel_entity_squared> 
+  <rule: rel_entity_rounded>      \( <entity_name> \)
+                                  (?{ $MATCH = { name => $MATCH{entity_name}{identifier}, type => 'rounded'} })
+  
+  <rule: rel_entity_squared>      \[ <entity_name> \] 
+                                  (?{ $MATCH = { name => $MATCH{entity_name}{identifier}, type => 'squared'} })
+  
+  <rule: cardinality>              <left=left_cardinality_symbol>--<right=right_cardinality_symbol>
 
-  <rule: first_cardinality_symbol>  <cardinality_symbol> 
+  <rule: left_cardinality_symbol>  <cardinality_symbol> 
                                     (?{ $MATCH = $MATCH{cardinality_symbol}})
 
-  <rule: second_cardinality_symbol>  <cardinality_symbol>
+  <rule: right_cardinality_symbol>  <cardinality_symbol>
                                      (?{ $MATCH = $MATCH{cardinality_symbol}})
 
   <rule: cardinality_symbol>     <one_optional>   (?{ $MATCH = 'one_optional'; })   |
@@ -73,7 +82,9 @@ my $grammar = qr{
                                 (?{ $MATCH = $MATCH{verb_direction}})
 
   <rule: verb_direction>        <left_right> (?{ $MATCH = 'left_right'; }) |
-                                <right_left> (?{ $MATCH = 'right_left'; })
+                                <right_left> (?{ $MATCH = 'right_left'; })|
+                                <no_direction> (?{ $MATCH = 'no_direction'; })
+  <rule: no_direction>          <identifier>                                  
   <rule: left_right>            <identifier> <dash>
   <rule: right_left>            <dash> <identifier>
   <token: dash>                 -
@@ -84,6 +95,6 @@ my $grammar = qr{
 }xms;
 
 sub parse {
-  my ( $self, $input ) = @_;
+  my ($input) = @_;
   return \%/ if $input =~ $grammar;
 }
